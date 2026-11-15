@@ -43,6 +43,8 @@ export async function review(
   const res = await d.exec(cmd ?? d.agentCmd, argv);
   const verdicts = [...res.stdout.matchAll(/^VERDICT:\s*(CLEAR|BLOCK)\b/gm)];
   const last = verdicts.at(-1);
+  // A failed attempt at this head must not leave an earlier receipt that `dori merge` would still trust.
+  if (!last || res.code !== 0) d.store.clearReceipt(pr.id, sha);
   if (!last) {
     const name = `${pr.id.replaceAll("/", "__").replace("#", "_")}@${sha}-${randomUUID()}.noverdict.txt`;
     const diagnostic = join(d.store.root, "receipts", name);
