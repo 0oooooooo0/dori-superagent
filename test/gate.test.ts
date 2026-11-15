@@ -154,4 +154,59 @@ describe("review + merge gate", () => {
     current = older;
     expect(await mergeGate(d, "o/r#72", { dryRun: true })).toBe(`MERGE_OK o/r#72 head=${older} (dry run)`);
   });
+
+  test("a reviewer that cannot start cannot leave the older CLEAR receipt behind", async () => {
+    const { w, d } = setup();
+    gh(w, []);
+    w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
+    await review(d, "o/r#73");
+
+    const deps = {
+      ...d,
+      exec: async (cmd: string) => {
+        if (cmd === "gh") return { code: 0, stdout: JSON.stringify({ headRefOid: head }), stderr: "" };
+        throw new Error("spawn omo ENOENT");
+      },
+    };
+    await expect(review(deps, "o/r#73")).rejects.toThrow("spawn omo ENOENT");
+    expect(d.store.receipt("o/r#73", head)).toBeUndefined();
+    await expect(mergeGate(deps, "o/r#73", { dryRun: true })).rejects.toThrow("no review receipt");
+  });
+
+  test("an in-flight review at the head leaves no receipt for merge to trust", async () => {
+    const { w, d } = setup();
+    gh(w, []);
+    w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
+    await review(d, "o/r#74");
+
+    let release!: () => void;
+    const finish = new Promise<void>((r) => (release = r));
+    let started!: () => void;
+    const began = new Promise<void>((r) => (started = r));
+    const deps = {
+      ...d,
+      exec: async (cmd: string, argv: readonly string[]) => {
+        if (cmd === "gh")
+          return {
+            code: 0,
+            stdout:
+              argv[1] === "checks"
+                ? JSON.stringify([{ name: "test", bucket: "pass" }])
+                : JSON.stringify({ headRefOid: head }),
+            stderr: "",
+          };
+        started();
+        await finish;
+        return { code: 0, stdout: "VERDICT: CLEAR", stderr: "" };
+      },
+    };
+    const inflight = review(deps, "o/r#74");
+    await began;
+    expect(d.store.receipt("o/r#74", head)).toBeUndefined();
+    await expect(mergeGate(deps, "o/r#74", { dryRun: true })).rejects.toThrow("no review receipt");
+
+    release();
+    expect((await inflight).verdict).toBe("CLEAR");
+    expect(await mergeGate(deps, "o/r#74", { dryRun: true })).toBe(`MERGE_OK o/r#74 head=${head} (dry run)`);
+  });
 });
