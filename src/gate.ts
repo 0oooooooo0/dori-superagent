@@ -32,14 +32,14 @@ export async function review(
   model?: string,
 ): Promise<{ verdict: "CLEAR" | "BLOCK"; sha: string }> {
   const pr = parsePr(prId);
-  // A broken hooks config fails before any gh call; the reviewer itself replaces the built-in command below.
-  const hook = loadHooks(d.store.root).reviewCommand;
   const sha = await headSha(d, pr);
-  const release = d.store.lockHead(pr.id, sha, d.now());
+  const release = d.store.lockReceipt(pr.id, sha, d.now());
   if (!release) throw new Refusal(`a review or merge is already in progress at head ${sha.slice(0, 12)}`);
   try {
     // Clear first: an in-flight, interrupted or failed attempt at this head must never stay merge-eligible.
     d.store.clearReceipt(pr.id, sha);
+    // hooks.reviewCommand replaces the built-in reviewer; it must print a VERDICT line like the built-in one.
+    const hook = loadHooks(d.store.root).reviewCommand;
     const vars = { pr: pr.id, repo: pr.repo, number: String(pr.number), sha };
     const text = prompt("review.md", vars);
     const [cmd, ...argv] = hook
@@ -81,7 +81,7 @@ type Check = { name: string; bucket: string };
 export async function mergeGate(d: Deps, prId: string, opts: { dryRun?: boolean } = {}): Promise<string> {
   const pr = parsePr(prId);
   const sha = await headSha(d, pr);
-  const release = d.store.lockHead(pr.id, sha, d.now());
+  const release = d.store.lockReceipt(pr.id, sha, d.now());
   if (!release) {
     if (!opts.dryRun) d.usage.record({ name: "dori.merge_decided", outcome: "review_in_progress" });
     throw new Refusal(

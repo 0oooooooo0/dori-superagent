@@ -175,7 +175,7 @@ describe("review + merge gate", () => {
     expect((await review(d, "o/r#73")).verdict).toBe("CLEAR");
   });
 
-  test("an in-flight review at the head leaves no receipt for merge to trust", async () => {
+  test("two overlapping reviews at one head: the second refuses, merge rejects the first, and a later review is eligible", async () => {
     const { w, d } = setup();
     gh(w, []);
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
@@ -210,6 +210,10 @@ describe("review + merge gate", () => {
 
     release();
     expect((await inflight).verdict).toBe("CLEAR");
+    expect(await mergeGate(deps, "o/r#74", { dryRun: true })).toBe(`MERGE_OK o/r#74 head=${head} (dry run)`);
+
+    // The lock is gone: a later review can run, and its receipt is eligible again.
+    expect((await review(deps, "o/r#74")).verdict).toBe("CLEAR");
     expect(await mergeGate(deps, "o/r#74", { dryRun: true })).toBe(`MERGE_OK o/r#74 head=${head} (dry run)`);
   });
 });

@@ -158,7 +158,7 @@ export class Store {
   }
 
   /** One review or merge at a time per (pr, sha); a held lock is a live attempt the gate must not ignore. */
-  lockHead(pr: string, sha: string, now: number): (() => void) | undefined {
+  lockReceipt(pr: string, sha: string, now: number): (() => void) | undefined {
     return takeLock(`${this.receiptPath(pr, sha)}.lock`, now, HEAD_LOCK_STALE_MS);
   }
 
