@@ -171,6 +171,8 @@ describe("review + merge gate", () => {
     await expect(review(deps, "o/r#73")).rejects.toThrow("spawn omo ENOENT");
     expect(d.store.receipt("o/r#73", head)).toBeUndefined();
     await expect(mergeGate(deps, "o/r#73", { dryRun: true })).rejects.toThrow("no review receipt");
+    w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
+    expect((await review(d, "o/r#73")).verdict).toBe("CLEAR");
   });
 
   test("an in-flight review at the head leaves no receipt for merge to trust", async () => {
@@ -203,7 +205,8 @@ describe("review + merge gate", () => {
     const inflight = review(deps, "o/r#74");
     await began;
     expect(d.store.receipt("o/r#74", head)).toBeUndefined();
-    await expect(mergeGate(deps, "o/r#74", { dryRun: true })).rejects.toThrow("no review receipt");
+    await expect(mergeGate(deps, "o/r#74", { dryRun: true })).rejects.toThrow("review_in_progress");
+    await expect(review(deps, "o/r#74")).rejects.toThrow("already in progress");
 
     release();
     expect((await inflight).verdict).toBe("CLEAR");

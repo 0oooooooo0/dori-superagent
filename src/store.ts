@@ -11,7 +11,7 @@ import {
   readQueue,
   writeQueue,
 } from "./inbox-files.ts";
-import { takeInboxLock } from "./inbox-lock.ts";
+import { takeInboxLock, takeLock } from "./inbox-lock.ts";
 import { refFromText, refText, sameSession } from "./refs.ts";
 import type { SessionRef } from "./runtime/types.ts";
 import {
@@ -23,6 +23,7 @@ import {
   type QueuedMessage,
   type ReviewReceipt,
   type Role,
+  HEAD_LOCK_STALE_MS,
 } from "./store-types.ts";
 
 export type { HostLoad } from "./store-types.ts";
@@ -154,6 +155,11 @@ export class Store {
   /** A failed review at this head must not leave an earlier receipt that the merge gate would still trust. */
   clearReceipt(pr: string, sha: string): void {
     rmSync(this.receiptPath(pr, sha), { force: true });
+  }
+
+  /** One review or merge at a time per (pr, sha); a held lock is a live attempt the gate must not ignore. */
+  lockHead(pr: string, sha: string, now: number): (() => void) | undefined {
+    return takeLock(`${this.receiptPath(pr, sha)}.lock`, now, HEAD_LOCK_STALE_MS);
   }
 
   receipt(pr: string, sha: string): ReviewReceipt | undefined {
