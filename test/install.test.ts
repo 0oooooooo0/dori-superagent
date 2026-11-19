@@ -62,6 +62,8 @@ function setup() {
       env: {
         ...gitEnv,
         HOME: home,
+        XDG_STATE_HOME: join(home, ".local/state"),
+        XDG_CONFIG_HOME: join(home, ".config"),
         DORI_SRC: src,
         SKILLS_DIR: join(home, "skills"),
         // Only the system directories beside the stubs, so a doriface-host on the developer's PATH is not seen.
