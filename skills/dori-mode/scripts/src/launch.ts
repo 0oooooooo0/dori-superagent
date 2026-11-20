@@ -1,9 +1,10 @@
+import { resolve } from "node:path";
+
 import { configPath, fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { laneGoalActive } from "./goal-record.ts";
-import { BRIEF_START, footer, originalBrief, quoteForPane } from "./launch-footer.ts";
-import type { Runtimes } from "../../../../src/runtime/registry.ts";
-import type { SessionRef } from "../../../../src/runtime/types.ts";
+import { BRIEF_START, cliCommand, footer, originalBrief, quoteForPane } from "./launch-footer.ts";
+import { AGENT_SESSION_KINDS, type SessionRef } from "../../../../src/runtime/types.ts";
 import { LANE_KEY, type Lane, RESERVED_LANE_KEY, sessionFields } from "./registry.ts";
 import { iso, runtimesOf } from "./run.ts";
 import { Reports } from "./reports.ts";
@@ -12,8 +13,7 @@ import type { BudgetLimits } from "./supervision-observe.ts";
 import { Lessons, renderLessons } from "./lessons.ts";
 import { laneLaunchEnv, TokenFileError } from "./slack-token.ts";
 import { startupFailure } from "./startup-screen.ts";
-import { launchFinished, launchScreen } from "./launch-finished.ts";
-import { isKind } from "../../../../src/runtime/hc/exec.ts";
+import { launchFinished, launchScreen, launchStatus } from "./launch-finished.ts";
 
 export type LaunchInput = {
   readonly key: string;
@@ -32,24 +32,6 @@ export class LaunchError extends Error {}
 // The first check is 20 s after start, then the screen and status are re-read every 10 s until `startupWaitSeconds`.
 const FIRST_CHECK_MS = 20_000;
 const RECHECK_MS = 10_000;
-/**
- * The runtime's own status word for the lane's session. Unlike agentStatus it keeps `shell` (no agent in the session)
- * apart from no status yet: herdr lists an agent that has not reported as `unknown` and a pane with no agent as `shell`.
- * hc lists both with no status, so a session listed with none is probed, which names a shell in front. A session missing
- * from the list is `gone`.
- */
-const launchStatus = async (rts: Runtimes, ref: SessionRef): Promise<{ status?: string; error?: string }> => {
-  try {
-    const found = (await rts.for(ref).list()).find((s) => s.ref.id === ref.id);
-    if (!found) return { status: "gone" };
-    if (found.status !== undefined) return { status: found.status };
-    const probed = (await rts.for(ref).probe(ref)).status;
-    return probed === "shell" || probed === "gone" ? { status: probed } : {};
-  } catch (e) {
-    if (isKind(e, "not_found")) return { status: "gone" };
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-};
 const ready = (s: string | undefined): boolean => s === "idle" || s === "working";
 const unreported = (s: string | undefined): boolean => s === undefined || s === "unknown";
 // `goalMarker` is the agent's status text while a goal is active (omo: `Pursuing goal`). A lane that starts but never
@@ -76,6 +58,20 @@ export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promis
     if (value != null && (!Number.isFinite(value) || value < 0)) throw new LaunchError(`invalid ${name} ceiling`);
   }
 };
+
+const laneEnv = (): Record<string, string> => {
+  try {
+    return laneLaunchEnv(process.env, configPath());
+  } catch (e) {
+    throw e instanceof TokenFileError ? new LaunchError(`token file refused: ${e.message}`) : e;
+  }
+};
+// A lane in an agent session (omo-host) runs in the host's environment, not one launch gives it: its env, with this
+// config's absolute path, rides in every dori command its footer names instead.
+const hostedCli = (deps: FlowDeps): string | undefined =>
+  deps.config.laneRuntime !== undefined && AGENT_SESSION_KINDS.has(deps.config.laneRuntime)
+    ? cliCommand(undefined, { ...laneEnv(), DORI_CONFIG: resolve(configPath()) })
+    : undefined;
 
 export const prepareLaunch = async (
   deps: FlowDeps,
@@ -109,7 +105,7 @@ export const prepareLaunch = async (
   return {
     lane: draft,
     warnings: problems.map((problem) => `LESSON_WARNING ${problem}`),
-    preamble: `${renderLessons(lessons)}${BRIEF_START}\n${originalBrief(await briefFile.text())}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities)}`,
+    preamble: `${renderLessons(lessons)}${BRIEF_START}\n${originalBrief(await briefFile.text())}\n${footer(draft, deps.config.leadPane, deps.config.repoIdentities, hostedCli(deps))}`,
   };
 };
 
@@ -132,17 +128,15 @@ const startLane = async (
   await Bun.write(input.brief, preamble);
   const rts = runtimesOf(deps);
   const group = deps.config.laneWorkspace || undefined;
-  let env: Record<string, string>;
-  try {
-    env = laneLaunchEnv(process.env, configPath());
-  } catch (e) {
-    throw e instanceof TokenFileError ? new LaunchError(`token file refused: ${e.message}`) : e;
-  }
+  let hosted: boolean;
   let ref: SessionRef;
   try {
-    const spec = { name: input.key, role: "lane", container: "tab", cwd, env } as const;
-    ref = await rts.default.create(group === undefined ? spec : { ...spec, group });
+    hosted = AGENT_SESSION_KINDS.has(rts.lane.kind);
+    const env = hosted ? {} : laneEnv();
+    const spec = { name: input.key, role: "lane", container: "tab", cwd, env, model } as const;
+    ref = await rts.lane.create(group === undefined ? spec : { ...spec, group });
   } catch (e) {
+    if (e instanceof LaunchError) throw e;
     throw new LaunchError(`session create failed: ${e instanceof Error ? e.message : String(e)}`);
   }
   const pane = ref.id;
@@ -160,7 +154,9 @@ const startLane = async (
   });
   const prompt = `${deps.config.launchKeywords}. Read and execute the lane brief at ${input.brief} in full. You are the ${input.key} lane; report as the brief's footer says.`;
   try {
-    await rts.for(ref).start(ref, fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" "));
+    await rts
+      .for(ref)
+      .start(ref, hosted ? prompt : fill(deps.config.agentCommand, { model, prompt }).map(quoteForPane).join(" "));
   } catch (e) {
     return { lane, startup: `STARTUP_ERROR ${input.key} ${pane}: start failed: ${lastLines(String(e))}` };
   }

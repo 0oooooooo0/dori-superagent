@@ -1,6 +1,12 @@
 // Sessions across every runtime the skill talks to: one `Runtimes` registry, each stored ref answered by its own kind.
 import type { Runtimes } from "../../../../src/runtime/registry.ts";
-import { type DeliverWhen, formatRef, type SessionInfo, type SessionRef } from "../../../../src/runtime/types.ts";
+import {
+  AGENT_SESSION_KINDS,
+  type DeliverWhen,
+  formatRef,
+  type SessionInfo,
+  type SessionRef,
+} from "../../../../src/runtime/types.ts";
 import type { Clock } from "./run.ts";
 
 export class UnsafeTextError extends Error {}
@@ -54,9 +60,14 @@ export const readScreen = async (rts: Runtimes, ref: SessionRef, lines?: number)
 /** States a runtime reports for a session whose agent is running. A screen read never stands in for these. */
 export const ALIVE_STATUSES: ReadonlySet<string> = new Set(["idle", "working", "blocked", "done", "error"]);
 
-/** The agent's status word as the runtime lists it; undefined when the session runs no agent or is gone. */
+/**
+ * The agent's status word as the runtime lists it; undefined when the session runs no agent or is gone. An agent session
+ * (omo-host) that sat idle past the host's eviction window is parked and no longer listed: it is probed, which resumes it.
+ */
 export const agentStatus = async (rts: Runtimes, ref: SessionRef): Promise<string | undefined> => {
-  const status = (await rts.for(ref).list()).find((s) => s.ref.id === ref.id)?.status;
+  const rt = rts.for(ref);
+  const listed = (await rt.list()).find((s) => s.ref.id === ref.id)?.status;
+  const status = listed ?? (AGENT_SESSION_KINDS.has(ref.runtime) ? (await rt.probe(ref)).status : undefined);
   return status === "shell" || status === "gone" ? undefined : status;
 };
 
