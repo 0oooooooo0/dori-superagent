@@ -32,11 +32,25 @@ export const originalBrief = (text: string): string => {
   return brief.slice(start === -1 || start > foot ? 0 : start + BRIEF_START.length + 1, foot).replace(/\s*$/, "");
 };
 
+/**
+ * The argv a lane sends its [REPORT] line to the lead with, by the lead's runtime. A lane in an agent session (omo-host)
+ * has no terminal id in its environment to tell it which runtime the lead's pane is on, so the footer names the command.
+ */
+export const leadSendArgv = (kind: string | undefined, leadPane: string): readonly string[] | undefined =>
+  !leadPane
+    ? undefined
+    : kind === "hc"
+      ? ["hc", "send", leadPane, "--"]
+      : kind === "herdr"
+        ? ["herdr", "pane", "run", leadPane]
+        : undefined;
+
 export const footer = (
   lane: Lane,
   leadPane: string,
   identities: DoriConfig["repoIdentities"] = {},
   cli: string = CLI,
+  leadSend: readonly string[] | undefined = undefined,
 ): string =>
   [
     "",
@@ -44,7 +58,7 @@ export const footer = (
     FOOTER_HEADING,
     `- Key: ${lane.key}. Work thread: ${lane.thread}.`,
     `- Done = ${lane.done}. The lane closes only when every signal reads back live.`,
-    `- Persist each milestone, blocker, question, halt and completion with ${cli} report ${lane.key} --kind milestone|blocker|question|halted|done --text "what, with evidence links". It appends reports.jsonl and prints the human [REPORT] line; send that line to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string.`,
+    `- Persist each milestone, blocker, question, halt and completion with ${cli} report ${lane.key} --kind milestone|blocker|question|halted|done --text "what, with evidence links". It appends reports.jsonl and prints the human [REPORT] line; ${leadSend ? `send that line to the lead as this argv array (the line as its last element), never a shell string: ${JSON.stringify([...leadSend, "[REPORT] ..."])}` : `send that line to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string`}.`,
     ...(Object.keys(identities).length
       ? [
           "- Before committing, set the repository's identity below for that command only; never change the global Git identity. For a repository not listed, ask the lead for its identity before the first commit.",

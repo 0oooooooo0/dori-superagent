@@ -7,6 +7,8 @@ import {
   type SessionInfo,
   type SessionRef,
 } from "../../../../src/runtime/types.ts";
+import type { FlowDeps } from "./done-flow.ts";
+import { statusOf } from "./registry.ts";
 import type { Clock } from "./run.ts";
 
 export class UnsafeTextError extends Error {}
@@ -137,4 +139,25 @@ export const sendVerified = async (
     if (after.status === "working") return "delivered";
   }
   return "unconfirmed";
+};
+
+/**
+ * Whether the lane was closed while a reader (a launch's startup check, a freshness sweep) still had it in hand. A host
+ * session (AGENT_SESSION_KINDS) is resumed by any read that names it, closed or not, so a read that raced the close may
+ * have brought it back: it is closed again here, and the reader stops reading it.
+ */
+export const closedMeanwhile = async (
+  deps: FlowDeps,
+  rts: Runtimes,
+  ref: SessionRef,
+  key: string,
+): Promise<boolean> => {
+  const lane = await deps.registry.read(key);
+  if (lane === null || statusOf(lane) !== "closed") return false;
+  if (AGENT_SESSION_KINDS.has(ref.runtime))
+    await rts
+      .for(ref)
+      .close(ref)
+      .catch(() => undefined);
+  return true;
 };

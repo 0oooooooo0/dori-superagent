@@ -1,9 +1,8 @@
 import type { Runtimes } from "../../../../src/runtime/registry.ts";
 import { isKind } from "../../../../src/runtime/hc/exec.ts";
-import { AGENT_SESSION_KINDS, type SessionRef } from "../../../../src/runtime/types.ts";
+import type { SessionRef } from "../../../../src/runtime/types.ts";
 import { finished } from "./boot-monitors.ts";
 import type { FlowDeps } from "./done-flow.ts";
-import { statusOf } from "./registry.ts";
 import { Reports } from "./reports.ts";
 import { startupScreen } from "./startup-screen.ts";
 
@@ -43,25 +42,4 @@ export const launchStatus = async (rts: Runtimes, ref: SessionRef): Promise<{ st
     if (isKind(e, "not_found")) return { status: "gone" };
     return { error: e instanceof Error ? e.message : String(e) };
   }
-};
-
-/**
- * Whether the lane was closed while its launch was still checking it. A host session (AGENT_SESSION_KINDS) is resumed
- * by any read that names it, closed or not, so a check that raced the close may have brought it back: it is closed
- * again here, and the check stops reading it.
- */
-export const closedMeanwhile = async (
-  deps: FlowDeps,
-  rts: Runtimes,
-  ref: SessionRef,
-  key: string,
-): Promise<boolean> => {
-  const lane = await deps.registry.read(key);
-  if (lane === null || statusOf(lane) !== "closed") return false;
-  if (AGENT_SESSION_KINDS.has(ref.runtime))
-    await rts
-      .for(ref)
-      .close(ref)
-      .catch(() => undefined);
-  return true;
 };
