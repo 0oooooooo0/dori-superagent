@@ -58,15 +58,38 @@ const questionLines = (state: Record<string, unknown>): string[] =>
     }),
   );
 
+const count = (value: unknown): number => (typeof value === "number" && value > 0 ? value : 0);
+
+/**
+ * The background work an idle turn waits on (a shell the agent's bash detached, a child session). omo lists the goal
+ * monitor there too, which runs for every session with a goal and is no work of its own.
+ */
+const backgroundWork = (lifecycle: Record<string, unknown>): number => {
+  const on = rec(lifecycle["waitingOn"]);
+  const sources = Array.isArray(on["background"]) ? on["background"].map(rec) : [];
+  return (
+    count(on["children"]) +
+    sources.filter((s) => s["source"] !== "goal-monitor").reduce((n, s) => n + count(s["activeCount"]), 0)
+  );
+};
+
 /**
  * What a pane's footer shows: any open question, then `Working (<time in this state>)` while a turn runs (supervision
- * reads the duration), the bare idle prompt `❯` otherwise (the freshness sweep's idle check), then the goal as omo's
- * footer names it.
+ * reads the duration), `Running (<time>) · waiting on N background task(s)` while the agent waits on its own
+ * background work (a lane in a long command is not stalled), the bare idle prompt `❯` otherwise (the freshness sweep's
+ * idle check), then the goal as omo's footer names it.
  */
 export function footerLines(state: Record<string, unknown>, goal: string, now: number): string[] {
-  const since = Date.parse(str(rec(state["lifecycle"])["since"]) ?? "");
+  const lifecycle = rec(state["lifecycle"]);
+  const since = Date.parse(str(lifecycle["since"]) ?? "");
+  const time = elapsed(Number.isNaN(since) ? 0 : now - since);
   const working = state["isStreaming"] === true || state["isCompacting"] === true;
-  const status = working ? `Working (${elapsed(Number.isNaN(since) ? 0 : now - since)})` : "❯";
+  const waiting = backgroundWork(lifecycle);
+  const status = working
+    ? `Working (${time})`
+    : waiting
+      ? `Running (${time}) · waiting on ${waiting} background task${waiting === 1 ? "" : "s"}`
+      : "❯";
   const goalLine = goal === "active" ? "Pursuing goal" : goal === "none" ? [] : `Goal ${goal}`;
   return [...questionLines(state), status, ...(Array.isArray(goalLine) ? goalLine : [goalLine])];
 }

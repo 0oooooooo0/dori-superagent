@@ -124,6 +124,30 @@ test("the rendered transcript is a screen the lane parsers read: report, working
   expect(reports.observe("kk", await rt.read(ref, 60), T0, 15 * 60_000)?.state).toBe("stalled");
 });
 
+test("a lane waiting on its own background command reads as running, never as an idle stall", async () => {
+  const waitingOn = (background: unknown[]) => ({
+    state: "waiting_background",
+    since: new Date(T0 - 90_000).toISOString(),
+    waitingOn: { children: 0, background, human: [] },
+  });
+  const shell = {
+    source: "terminal-background-sessions",
+    activeCount: 1,
+    items: [{ id: "bash_1", label: "sleep 200" }],
+  };
+  const s = host.add({ id: "00000000-0000-4000-8000-000000000011", state: { lifecycle: waitingOn([shell]) } });
+  const rt = new OmoHostRuntime(host.exec, { now: () => T0 });
+  const ref = { runtime: "omo-host" as const, id: s.id };
+  const reports = new Reports(state.dir);
+  reports.report("kk", "milestone", "started", T0 - 30 * 60_000);
+  const screen = await rt.read(ref, 60);
+  expect(screen.split("\n").at(-1)).toBe("Running (1m 30s) · waiting on 1 background task");
+  expect(reports.observe("kk", screen, T0, 15 * 60_000)?.state).toBe("running");
+  // The goal monitor alone is no work: an idle lane with a goal still reads as the idle prompt.
+  s.state = { ...s.state, lifecycle: waitingOn([{ source: "goal-monitor", activeCount: 1 }]) };
+  expect((await rt.read(ref, 60)).split("\n").at(-1)).toBe("❯");
+});
+
 test("pause and resume are confirmed from the goal record, since a host session prints the goal command nowhere", async () => {
   const s = host.add({ id: "00000000-0000-4000-8000-000000000005" });
   writeGoal(s, "active");
