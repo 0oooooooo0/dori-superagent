@@ -6,9 +6,10 @@ import { OmoHostRuntime } from "../../../../src/runtime/omo-host/index.ts";
 import { FakeOmoHost, SOCKET, writeGoal } from "../../../../test/fake-omo-host.ts";
 import { ConfigError, loadConfig } from "../src/config.ts";
 import { anchoredReportLine } from "../src/freshness.ts";
+import { closeLane } from "../src/done-flow.ts";
 import { launchLane } from "../src/launch.ts";
 import { pauseLane, resumeLane } from "../src/pause.ts";
-import type { Lane } from "../src/registry.ts";
+import { type Lane, withStatus } from "../src/registry.ts";
 import { Reports } from "../src/reports.ts";
 import type { Runner } from "../src/run.ts";
 import { runtimesOf } from "../src/run.ts";
@@ -169,4 +170,54 @@ test("a lane's own dori call finds its lane by PI_SESSION_ID, and its session id
     id,
     via: "runtime",
   });
+});
+
+test("a lane the lead closes while its launch still checks it is closed again, not resumed by the check", async () => {
+  const brief = join(state.dir, "brief.md");
+  writeFileSync(brief, "# brief\n");
+  const d = deps();
+  const launched = runner();
+  let raced = false;
+  const run: Runner = async (argv, opts) => {
+    // The close lands between the check's list and its state call, and the host resumes the session on that state call.
+    if (argv[0] === "omo" && argv[3] === "state" && !raced) {
+      raced = true;
+      const at = new Date(T0).toISOString();
+      await launched(["omo", "host", "session", "close", argv[4] ?? "", "--json"]);
+      const lane = await d.registry.read("fix-x");
+      if (lane) await d.registry.write(withStatus(lane, "closed", "closed by the lead", at, { closedAt: at }));
+    }
+    return launched(argv, opts);
+  };
+  const r = await launchLane({ ...d, run }, { key: "fix-x", title: "t", brief, done: "closed acme/app#3" });
+  expect(raced).toBe(true);
+  expect(r.startup).toBe("STARTUP_DONE fix-x");
+  expect(host.sessions.get(r.lane.pane ?? "")?.parked).toBe(true);
+});
+
+test("closing a lane closes its host session once more after the registry write, for a read that resumed it", async () => {
+  const s = host.add({ id: "00000000-0000-4000-8000-000000000008", name: "dori/g1/fix-x" });
+  const proof = join(state.dir, "proof.txt");
+  writeFileSync(proof, "ok\n");
+  const base = runner();
+  const run: Runner = async (argv, opts) => {
+    const r = await base(argv, opts);
+    // A launch's startup check names the session right after the first close: the host resumes it.
+    if (argv[0] === "omo" && argv[3] === "close" && host.calls.filter((c) => c[0] === "close").length === 1)
+      s.parked = false;
+    return r;
+  };
+  const lane: Lane = {
+    key: "fix-x",
+    title: "t",
+    thread: "none",
+    brief: "/b.md",
+    done: `file ${proof}`,
+    openedAt: new Date(T0).toISOString(),
+    sessionRef: { runtime: "omo-host", id: s.id, group: "g1" },
+    pane: s.id,
+  };
+  const closed = await closeLane({ ...deps(), run }, lane, "closed by the lead");
+  expect(closed.closed).toBe(true);
+  expect(s.parked).toBe(true);
 });

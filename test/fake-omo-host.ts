@@ -121,7 +121,7 @@ export class FakeOmoHost {
         return ok({ action: "abort", acknowledged: true, aborted });
       }
       case "close":
-        this.sessions.delete(s.id);
+        s.parked = true;
         return ok({ action: "close", closed: true });
       default:
         return { code: 2, stdout: `${JSON.stringify({ action: "error", reason: "usage" })}\n`, stderr: "" };

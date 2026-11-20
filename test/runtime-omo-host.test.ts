@@ -159,7 +159,8 @@ describe("keys, close, self, attach", () => {
     const { host, rt } = rig();
     host.add({ id: ID });
     await rt.close(REF);
-    expect(host.sessions.size).toBe(0);
+    expect(await rt.list()).toEqual([]);
+    host.sessions.clear();
     await rt.close(REF);
     const verbs: string[] = [];
     const viewed = new OmoHostRuntime(async (_cmd, argv) => {
