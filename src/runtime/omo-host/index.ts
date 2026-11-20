@@ -13,7 +13,7 @@ import type {
   SessionRuntime,
   SubmitResult,
 } from "../types.ts";
-import { asText, hostCall, isReason, OMO, str } from "./exec.ts";
+import { asText, hostCall, isReason, OMO, OmoHostError, str } from "./exec.ts";
 import { footerLines, renderEntries } from "./render.ts";
 import { close, create, goalOf, list, probeOf, selfRef, stateOf } from "./sessions.ts";
 
@@ -81,10 +81,26 @@ export class OmoHostRuntime implements SessionRuntime {
     if (!(await list(this.exec, undefined)).some((s) => s.ref.id === ref.id)) return "";
     const state = await stateOf(this.exec, ref.id);
     if (state === undefined) return "";
-    const tail = await hostCall(this.exec, ["read", ref.id, "--tail", String(Math.min(lines * 2, 400))]);
-    const entries = Array.isArray(tail["entries"]) ? tail["entries"] : [];
+    const entries = await this.tail(ref.id, Math.min(lines * 2, 400));
     const shown = [...renderEntries(entries).slice(-lines), ...footerLines(state, goalOf(state), this.now())];
     return shown.slice(-lines).join("\n");
+  }
+
+  /**
+   * The last `want` transcript entries. The omo CLI exits before a pipe takes more than 64 KiB of its JSON line, so a
+   * tail holding a large entry (an image, a long tool output) arrives cut off, unparseable, with exit 0: it is asked
+   * again for half as many entries, and a last entry too large on its own reads as no entries.
+   */
+  private async tail(id: string, want: number): Promise<unknown[]> {
+    for (let n = want; n >= 1; n = Math.floor(n / 2)) {
+      try {
+        const tail = await hostCall(this.exec, ["read", id, "--tail", String(n)]);
+        return Array.isArray(tail["entries"]) ? tail["entries"] : [];
+      } catch (e) {
+        if (!(e instanceof OmoHostError && e.result.code === 0)) throw e;
+      }
+    }
+    return [];
   }
 
   /**

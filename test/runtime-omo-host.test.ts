@@ -193,6 +193,29 @@ describe("keys, close, self, attach", () => {
     expect(await rt.read(REF, 40)).toBe("> hi\n❯");
   });
 
+  test("a tail the CLI cut off at the pipe (exit 0, no whole JSON line) is read again with half as many entries", async () => {
+    const host = new FakeOmoHost();
+    const say = (text: string) => ({
+      type: "message",
+      message: { role: "assistant", content: [{ type: "text", text }] },
+    });
+    host.add({ id: ID, entries: [say("one"), say("two"), say("three")] });
+    const tails: number[] = [];
+    const rt = new OmoHostRuntime(
+      async (cmd, argv) => {
+        if (argv[2] !== "read") return host.exec(cmd, argv);
+        const n = Number(argv[argv.indexOf("--tail") + 1]);
+        tails.push(n);
+        return n > 3
+          ? { code: 0, stdout: '{"action":"read","entries":[{"type":"mess', stderr: "" }
+          : host.exec(cmd, argv);
+      },
+      { env: {}, now: () => NOW },
+    );
+    expect((await rt.read(REF, 60)).split("\n")).toEqual(["one", "two", "three", "❯"]);
+    expect(tails).toEqual([120, 60, 30, 15, 7, 3]);
+  });
+
   test("attachArgv is omo's TUI client on the host's socket for the session", async () => {
     const { host, rt } = rig();
     host.add({ id: ID });
