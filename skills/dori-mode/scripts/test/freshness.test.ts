@@ -168,19 +168,19 @@ test("a quoted placeholder is a template, but a placeholder after a later pipe i
   );
 });
 
-// An omo-host lane whose question tool waits for an answer (the host draws it as `? <title> [options]` above the status
-// line); its journal last said milestone 30 min ago, so without the question the lane would be nudged.
+// A lane with omo's question-tool request pending (senpi RpcQuestionUiRequest); its 30-min-old milestone invites a nudge.
+const spec = { id: "q1", header: "진행", question: "어떻게 진행할까요?", options: [{ label: "A" }, { label: "B" }] };
+const asked = { method: "question", questions: [{ ...spec, multiSelect: false }] };
 const questionLane = async (pendingQuestions: unknown[], entries: unknown[] = []) => {
   const state = withState();
   const T0 = Date.parse("2026-11-20T09:00:00.000Z");
   const world = newWorld();
   const host = new FakeOmoHost(join(state.dir, "sessions"));
   const s = host.add({ id: "00000000-0000-4000-8000-000000000021", state: { pendingQuestions }, entries });
-  const rest = fakeRunner(world);
   const deps = {
     ...depsFor(world, fakeClock(T0), state.dir, { runtime: "hc", laneRuntime: "omo-host", laneWorkspace: "g1" }),
     run: async (argv: readonly string[]) => {
-      if (argv[0] !== "omo") return rest(argv);
+      if (argv[0] !== "omo") return fakeRunner(world)(argv);
       const r = await host.exec("omo", argv.slice(1));
       return { code: r.code, out: r.stdout.trim(), err: r.stderr };
     },
@@ -198,7 +198,7 @@ const questionLane = async (pendingQuestions: unknown[], entries: unknown[] = []
 };
 
 test("a lane waiting on a question prompt gets one question report and no nudge (T2.10)", async () => {
-  const q = await questionLane([{ title: "어떻게 진행할까요?", options: ["A", "B"] }]);
+  const q = await questionLane([asked]);
   try {
     const first = await freshnessTick(q.deps, "/home/test");
     expect(q.journal().map((e) => [e.kind, e.text])).toEqual([
@@ -218,7 +218,7 @@ test("a lane waiting on a question prompt gets one question report and no nudge 
 });
 
 test("once the question is answered the next report is taken as usual, and a new question is reported again (T2.11)", async () => {
-  const q = await questionLane([{ title: "어떻게 진행할까요?", options: ["A", "B"] }]);
+  const q = await questionLane([asked]);
   try {
     await freshnessTick(q.deps, "/home/test");
     q.s.state = { ...q.s.state, pendingQuestions: [] };
@@ -227,7 +227,7 @@ test("once the question is answered the next report is taken as usual, and a new
     q.reports.report("ask-lane", "milestone", "went with A", Date.parse("2026-11-20T09:01:00.000Z"));
     await freshnessTick(q.deps, "/home/test");
     expect(q.reports.read("ask-lane")?.lastReport?.kind).toBe("milestone");
-    q.s.state = { ...q.s.state, pendingQuestions: [{ title: "어떻게 진행할까요?", options: ["A", "B"] }] };
+    q.s.state = { ...q.s.state, pendingQuestions: [asked] };
     await freshnessTick(q.deps, "/home/test");
     expect(q.journal().map((e) => e.kind)).toEqual(["milestone", "question", "milestone", "question"]);
   } finally {
