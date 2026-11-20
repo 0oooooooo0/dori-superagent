@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OmoHostRuntime } from "../src/runtime/omo-host/index.ts";
@@ -220,6 +220,17 @@ describe("keys, close, self, attach", () => {
     const { host, rt } = rig();
     host.add({ id: ID });
     expect(await rt.attachArgv(REF)).toEqual(["omo", "--attach", `unix://${SOCKET}`, "--session", ID]);
+  });
+
+  test("attachArgv names omo by its absolute path on this PATH, since the hc core starts the view with its own PATH", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "omo-bin-"));
+    dirs.push(dir);
+    writeFileSync(join(dir, "omo"), "#!/bin/sh\n");
+    chmodSync(join(dir, "omo"), 0o755);
+    const host = new FakeOmoHost();
+    host.add({ id: ID });
+    const rt = new OmoHostRuntime(host.exec, { env: { PATH: `/nonexistent:${dir}` }, now: () => NOW });
+    expect((await rt.attachArgv(REF))[0]).toBe(join(dir, "omo"));
   });
 
   test("a bare UUID is no ref, and omo-host is never the runtime the lead opens on", () => {

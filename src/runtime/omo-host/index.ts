@@ -167,10 +167,15 @@ export class OmoHostRuntime implements SessionRuntime {
     return close(this.exec, ref.id);
   }
 
-  /** The argv of a TUI client attached to the session (`omo --attach unix://<socket> --session <id>`), to watch it. */
+  /**
+   * The argv of a TUI client attached to the session (`omo --attach unix://<socket> --session <id>`), to watch it. omo
+   * is named by its absolute path on this process's PATH: the hc core that runs the view starts it with its own PATH,
+   * which may not hold omo (a Linux core started by systemd has no ~/.bun/bin).
+   */
   async attachArgv(ref: SessionRef): Promise<string[]> {
     const socket = str((await hostCall(this.exec, ["list"]))["socket"]);
     if (socket === undefined) throw new Error("omo host session list named no socket");
-    return [OMO, "--attach", `unix://${socket}`, "--session", ref.id];
+    const omo = Bun.which(OMO, { PATH: this.env["PATH"] ?? "" }) ?? OMO;
+    return [omo, "--attach", `unix://${socket}`, "--session", ref.id];
   }
 }
