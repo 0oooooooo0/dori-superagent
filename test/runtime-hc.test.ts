@@ -28,6 +28,8 @@ describe("create / start / createGroup", () => {
         "dori.name=Lane K",
         "--label",
         "dori.lane=Lane K",
+        "--label",
+        "space=dori",
         "--name",
         "lane-k",
         "--",
@@ -56,12 +58,23 @@ describe("create / start / createGroup", () => {
       "dori.role=lead",
       "--label",
       "dori.name=lead",
+      "--label",
+      "space=dori",
       "--name",
       "lead",
       "--",
       "env",
       "sh",
     ]);
+  });
+
+  test("a title becomes the herdr.name label Doriterm shows; the name and dori.* labels keep the key", async () => {
+    const { fake, rt } = rig();
+    await rt.create({ ...lane, title: "로그인 고치기" });
+    const run = fake.calls[1] ?? [];
+    expect(run).toContain("herdr.name=로그인 고치기");
+    expect(run).toContain("dori.lane=Lane K");
+    expect(run[run.indexOf("--name") + 1]).toBe("lane-k");
   });
 
   test("start sends the command into the shell with no status gate", async () => {

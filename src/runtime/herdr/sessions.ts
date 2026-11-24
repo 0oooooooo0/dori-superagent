@@ -35,19 +35,20 @@ export async function createGroup(cli: HerdrCli, label: string, cwd: string): Pr
  * `group` (no --workspace when absent or empty), or a split below `near`. The workspace form passes `--env` only when there is any.
  */
 export async function create(cli: HerdrCli, spec: CreateSpec): Promise<SessionRef> {
-  const { name, cwd } = spec;
+  const { cwd } = spec;
+  const label = spec.title || spec.name;
   const env = envFlags(spec.env);
   switch (spec.container) {
     case "workspace-root":
       return created(
-        (await cli.call(["workspace", "create", "--label", name, "--cwd", cwd, ...env, "--no-focus"]))["root_pane"],
+        (await cli.call(["workspace", "create", "--label", label, "--cwd", cwd, ...env, "--no-focus"]))["root_pane"],
       );
     case "tab": {
       const r = await cli.call([
         "tab",
         "create",
         "--label",
-        name,
+        label,
         "--cwd",
         cwd,
         "--no-focus",

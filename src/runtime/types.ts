@@ -37,6 +37,8 @@ export type SessionRole = "lead" | "duty" | "duty-loop" | "hourly-loop" | "lane"
  */
 export type CreateSpec = {
   readonly name: string;
+  /** What people read for the session: herdr's tab or workspace label, hc's `herdr.name` label (Doriterm's title). `name` stays its identity. */
+  readonly title?: string;
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
   readonly role: SessionRole;

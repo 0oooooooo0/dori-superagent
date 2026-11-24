@@ -40,7 +40,11 @@ async function liveNames(exec: Exec): Promise<Set<string>> {
   return names;
 }
 
-/** The `hc run` argv for a spec: labels for grouping, the env through the `env` utility (one argv element per K=V). */
+/**
+ * The `hc run` argv for a spec: labels for grouping, the env through the `env` utility (one argv element per K=V).
+ * `space=dori` puts every Dori session in one Doriterm space (unlabelled terminals land in its Home space), and a
+ * title becomes `herdr.name`, the title Doriterm shows instead of the slug name.
+ */
 export function createArgv(spec: CreateSpec, shell: string, name: string | undefined): string[] {
   for (const key of Object.keys(spec.env))
     if (!ENV_KEY.test(key)) throw new Error(`env key ${JSON.stringify(key)} is not a shell variable name`);
@@ -49,6 +53,8 @@ export function createArgv(spec: CreateSpec, shell: string, name: string | undef
     `dori.role=${spec.role}`,
     `dori.name=${spec.name}`,
     ...(spec.role === "lane" ? [`dori.lane=${spec.name}`] : []),
+    "space=dori",
+    ...(spec.title ? [`herdr.name=${spec.title}`] : []),
   ];
   return [
     "run",

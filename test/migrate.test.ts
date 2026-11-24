@@ -10,6 +10,13 @@ import { migrateWorld, msg, NEW, OLD, snapshot } from "./migrate-setup.ts";
 const HELD = { at: 5, state: "ambiguous" as const, detail: "timeout" };
 
 describe("dori migrate: one lane herdr -> hc", () => {
+  test("a titled lane keeps its title on the new session", async () => {
+    const { w, d, opts } = migrateWorld();
+    d.store.saveLane({ ...d.store.lane("k")!, title: "로그인 고치기" });
+    expect(await migrate(d, { lane: "k" }, opts())).toBe(0);
+    expect(w.hc.calls.find((c) => c[0] === "run")).toContain("herdr.name=로그인 고치기");
+  });
+
   test("happy: MIGRATED, checkpoint asked, handoff brief, queued stay queued, held stays held, old closed", async () => {
     const { w, d, lines, opts } = migrateWorld();
     d.store.saveInbox(OLD, [msg("one", 1), msg("two", 2), msg("held", 3, HELD)]);

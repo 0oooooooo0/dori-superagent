@@ -14,7 +14,7 @@ export async function startLane(
   d: Deps,
   key: string,
   briefFile: string,
-  opts: { cwd?: string; group?: string } = {},
+  opts: { cwd?: string; group?: string; title?: string } = {},
 ): Promise<Lane> {
   if (!KEY_RE.test(key)) throw new Refusal(`lane key must match ${KEY_RE}`);
   const reserved = reservedKey(key);
@@ -38,13 +38,22 @@ export async function startLane(
   const kickoff = `Read your brief at ${briefPath} and execute it. Your lane key is ${key}.`;
   const ref = await openSession(
     rt,
-    { name: key, role: "lane", container: "tab", cwd, env: { DORI_LANE: key, DORI_HOME: d.store.root }, group },
+    {
+      name: key,
+      ...(opts.title ? { title: opts.title } : {}),
+      role: "lane",
+      container: "tab",
+      cwd,
+      env: { DORI_LANE: key, DORI_HOME: d.store.root },
+      group,
+    },
     `${d.agentCmd} ${shq(kickoff)}`,
   );
 
   const now = d.now();
   const lane: Lane = {
     key,
+    ...(opts.title ? { title: opts.title } : {}),
     sessionRef: ref,
     paneId: ref.id,
     tabId: ref.container ?? "",

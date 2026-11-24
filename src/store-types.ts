@@ -10,6 +10,8 @@ export type LaneStatus = "working" | "waiting" | "ready" | "done" | "lost";
  */
 export type Lane = {
   key: string;
+  /** What people read for the lane (`start --title`); the key stays its identity. */
+  title?: string;
   sessionRef: SessionRef;
   migratedFrom?: SessionRef[];
   migration?: true;

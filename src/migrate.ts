@@ -40,6 +40,7 @@ function laneSubject(d: Deps, key: string): Subject {
     ...(lane.sessionPath === undefined ? {} : { sessionPath: lane.sessionPath }),
     spec: (group) => ({
       name: key,
+      ...(lane.title === undefined ? {} : { title: lane.title }),
       role: "lane",
       container: "tab",
       cwd: lane.cwd,

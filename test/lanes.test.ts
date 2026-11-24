@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
+import { main } from "../src/cli.ts";
 import { Refusal } from "../src/refusal.ts";
 import { done, ready, startLane } from "../src/lanes.ts";
 import { href } from "./fake.ts";
@@ -14,6 +15,16 @@ describe("lanes", () => {
     expect(await Bun.file(lane.brief).text()).toContain("dori ready fix-login --text");
     expect(lead.received).toEqual([`[START fix-login] lane opened in ${lane.paneId}`]);
     await expect(startLane(d, "fix-login", brief, { group: "w1" })).rejects.toThrow(Refusal);
+  });
+
+  test("start --title labels the herdr tab and stays on the lane record; the key stays the id", async () => {
+    const { w, d, brief } = setup();
+    expect(
+      await main(["start", "fix-login", "--brief", brief, "--workspace", "w1", "--title", "로그인 고치기"], d),
+    ).toBe(0);
+    const tab = w.calls.find((c) => c.cmd === "herdr" && c.argv[0] === "tab")!;
+    expect(tab.argv[tab.argv.indexOf("--label") + 1]).toBe("로그인 고치기");
+    expect(d.store.lane("fix-login")!.title).toBe("로그인 고치기");
   });
 
   test("start refuses the role names lead and duty as lane keys before it writes or opens anything", async () => {
