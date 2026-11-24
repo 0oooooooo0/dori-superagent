@@ -122,6 +122,21 @@ test("an agent that has not reported is waited for until startupWaitSeconds; a l
   expect(waits).toBe(2);
 });
 
+test("on hc, the lane's title becomes the herdr.name label Doriterm shows, in Doriterm's dori space", async () => {
+  // Given hc and a brief.
+  const brief = join(state.dir, "brief.md");
+  writeFileSync(brief, "# brief\n");
+  const deps = depsFor(world, { ...fakeClock(T0), sleep: async () => {} }, state.dir, { runtime: "hc" });
+  // When a lane launches with a title.
+  await launchLane(deps, { key: "fix-login", title: "로그인 고치기", brief, done: "closed acme/app#3" });
+  // Then its terminal carries the title and the space, and the key stays its lane label.
+  expect(world.terminals["t1"]?.labels).toMatchObject({
+    "herdr.name": "로그인 고치기",
+    space: "dori",
+    "dori.lane": "fix-login",
+  });
+});
+
 test("on hc, a program that has not reported a status yet is waited for, and one that never does is unconfirmed", async () => {
   // Given hc, whose list shows no status until the program reports one (what a slow omo start looks like, #202).
   const brief = join(state.dir, "brief.md");
