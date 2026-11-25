@@ -23,6 +23,7 @@ case "$1 $2" in
 "pr view") printf '{"headRefOid":"%s"}\\n' "$GH_HEAD" ;;
 "pr checks") printf '[{"name":"ci","bucket":"pass"}]\\n' ;;
 "pr merge") exit 0 ;;
+"api "*) printf '{"total_count":0,"workflow_runs":[]}\\n' ;;
 *) exit 1 ;;
 esac
 `,

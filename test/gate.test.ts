@@ -105,6 +105,7 @@ describe("review + merge gate", () => {
     w.gh = (argv) => {
       if (argv[1] === "view") return { code: 0, stdout: JSON.stringify({ headRefOid: current }) };
       if (argv[1] === "checks") return { code: 0, stdout: JSON.stringify([{ name: "test", bucket: "pass" }]) };
+      if (argv[0] === "api") return { code: 0, stdout: JSON.stringify({ total_count: 0, workflow_runs: [] }) };
       return { code: 0, stdout: "" };
     };
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
@@ -158,9 +159,11 @@ describe("review + merge gate", () => {
           return {
             code: 0,
             stdout:
-              argv[1] === "checks"
-                ? JSON.stringify([{ name: "test", bucket: "pass" }])
-                : JSON.stringify({ headRefOid: head }),
+              argv[0] === "api"
+                ? JSON.stringify({ total_count: 0, workflow_runs: [] })
+                : argv[1] === "checks"
+                  ? JSON.stringify([{ name: "test", bucket: "pass" }])
+                  : JSON.stringify({ headRefOid: head }),
             stderr: "",
           };
         started();
