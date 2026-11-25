@@ -1,8 +1,9 @@
-import { interactiveShellInFront } from "../foreground.ts";
+import { interactiveShellInFront, namesAgent } from "../foreground.ts";
 import { omoScreenIdle } from "../herdr/probe.ts";
 import type { AgentStatus, ForegroundProcess, Probe } from "../types.ts";
 import type { Exec } from "../exec.ts";
 import { hcCall, isKind } from "./exec.ts";
+import { foregroundGroup } from "./front.ts";
 
 /** Recent lines read to look for omo's idle input box (the same window the herdr runtime reads). */
 const SCREEN_LINES = 30;
@@ -68,6 +69,21 @@ async function screenShowsIdle(exec: Exec, id: string): Promise<boolean> {
 }
 
 /**
+ * #209: hc can report a status with no `foreground` (seen for up to ~0.5 s after a first report). Naming no foreground,
+ * it has not cleared a stale status either (a suspended agent, #66), so the report alone proves nothing. The OS process
+ * table is read instead: the agent is in front only when that group holds no interactive shell and a member names the
+ * app hc reported. Anything less leaves the probe's doubt (`shellInFront`) as it was.
+ */
+async function withOsForeground(exec: Exec, parsed: Probe): Promise<Probe> {
+  const { foreground, agent, rootPid } = parsed;
+  if (foreground !== undefined || agent === undefined || rootPid === undefined) return parsed;
+  const group = await foregroundGroup(exec, rootPid);
+  if (group === undefined || interactiveShellInFront(group.processes) || !namesAgent(group.processes, agent))
+    return parsed;
+  return { ...parsed, pgid: group.pgid, shellInFront: false, foreground: group.processes };
+}
+
+/**
  * An agent that never reports OSC 7501 (omo) is classified off its screen — the same evidence the herdr runtime
  * scrapes. `esc to interrupt` positively marks a turn (a false positive only ever reads as working, the safe
  * direction); omo's idle input marks idle; anything else is undefined so doubt stays `unknown` and callers keep
@@ -96,7 +112,7 @@ export type HcProbe = { readonly probe: Probe; readonly word: AgentStatus };
 export async function probeWithWord(exec: Exec, id: string): Promise<HcProbe> {
   let parsed: Probe;
   try {
-    parsed = parseProbe(await hcCall(exec, ["get", id]));
+    parsed = await withOsForeground(exec, parseProbe(await hcCall(exec, ["get", id])));
   } catch (e) {
     if (isKind(e, "not_found")) return { probe: { status: "gone", shellInFront: false }, word: "gone" };
     throw e;
