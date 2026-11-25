@@ -100,7 +100,7 @@ test("launch opens the lane with DORI_CONFIG and DORI_STATE_DIR of this home, so
   }
   const create = world.calls.find((c) => c[0] === "hc" && c[2] === "run") ?? [];
   const env = create.slice(create.indexOf("env") + 1);
-  expect(env).toContain(`DORI_CONFIG=${join(home, "config.json")}`);
+  expect(env.some((arg) => arg.startsWith("DORI_CONFIG="))).toBe(false);
   expect(env).toContain(`DORI_STATE_DIR=${join(home, "state")}`);
 });
 

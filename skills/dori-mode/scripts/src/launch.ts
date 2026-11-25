@@ -144,9 +144,9 @@ const startLane = async (
   }
   let ref: SessionRef;
   try {
-    // The lane reports into this home: the skill resolves only DORI_CONFIG and DORI_STATE_DIR, never DORI_HOME (#197).
-    // laneLaunchEnv's own DORI_CONFIG (a relative one, rewritten against this cwd) wins over the default.
-    const laneEnv = { DORI_CONFIG: configPath(), ...env, DORI_STATE_DIR: resolve(deps.config.stateDir) };
+    // The lane reports into this home (#197): DORI_CONFIG reaches it through laneLaunchEnv (inherited when absolute,
+    // rewritten against this cwd when relative); the state dir may come from the config file, so it is passed absolute.
+    const laneEnv = { ...env, DORI_STATE_DIR: resolve(deps.config.stateDir) };
     const spec = { name: input.key, role: "lane", container: "tab", cwd, env: laneEnv } as const;
     ref = await rts.default.create(group === undefined ? spec : { ...spec, group });
   } catch (e) {
