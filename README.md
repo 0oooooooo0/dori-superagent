@@ -55,7 +55,7 @@ Both installs put a command named `dori` on your PATH, so install one per machin
 
 ### Dori mode, the bot you talk to
 
-You need herdr, Bun 1.4.4 or newer, git, and the GitHub CLI `gh`.
+You need herdr, Bun 1.4.5 or newer, git, and the GitHub CLI `gh`.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sisyphuslabs/dori-superagent/main/install.sh | bash
@@ -69,7 +69,7 @@ The operating contract is [`skills/dori-mode/SKILL.md`](skills/dori-mode/SKILL.m
 
 ### The harness
 
-You need Bun 1.4.4 or newer, herdr, omo, and `gh` (for PR head SHAs, checks and the merge).
+You need Bun 1.4.5 or newer, herdr, omo, and `gh` (for PR head SHAs, checks and the merge).
 
 ```sh
 git clone https://github.com/sisyphuslabs/dori-superagent
@@ -170,13 +170,15 @@ A lane that has not reported for 10 minutes, and whose pane is not working, gets
 
 ### Merge needs a CLEAR receipt at the exact head and green checks
 
-`dori merge` reads the PR's head SHA with `gh`, then requires a receipt for that SHA in `~/.dori/receipts/` with verdict `CLEAR`. Only `dori review` writes receipts: it runs a fresh non-interactive omo on `prompts/review.md` pinned to that SHA, and when the reviewer prints no `VERDICT:` line, no receipt is written.
+`dori merge` reads the PR's head SHA with `gh`, then requires a receipt for that SHA in `~/.dori/receipts/` with verdict `CLEAR`. Only `dori review` writes receipts: it runs a fresh non-interactive omo on `prompts/review.md` pinned to that SHA; a review clears the earlier receipt for that SHA before it starts and writes a new one only when it returns CLEAR or BLOCK. The verdict is a column-zero `VERDICT: CLEAR` or `VERDICT: BLOCK` line (a trailing reason is allowed) or that whole line in markdown emphasis such as `**VERDICT: CLEAR**`; when the reviewer prints neither, no receipt is written. Bullets, blockquotes and indented code never count, and a plain and an emphasised verdict that disagree write no receipt. While a review or merge at that head is in progress, `dori merge` refuses instead of using an older receipt.
 
 Then `gh pr checks` must return at least one check, every check must be `pass` or `skipping`, and at least one must be `pass`. An empty check list is refused with "an empty check list is never green". A push after the review changes the head SHA, so the receipt no longer matches and `dori review` has to run again.
 
+A fork PR's `pull_request` workflow can wait for a maintainer's approval, fail to start, or be cancelled without leaving a check run, so `gh pr checks` never lists it and a check list of only `pass`/`skipping` can hide it. `dori merge` therefore also reads the `pull_request` runs at the exact head (`gh api repos/<owner>/<repo>/actions/runs?head_sha=<head>&event=pull_request`) and refuses while the latest run of any workflow there is not completed as `success`, `skipped` or `neutral`: `MERGE_REFUSED pull_request workflow run(s) not green at head <sha>: ci=action_required`. Only the newest run of each workflow counts, so an older cancelled or stale run left by a reopened PR does not block, and runs for another head or another event (`push`, `pull_request_target`) never block. When the runs cannot be read (a private repo without Actions read access, Actions disabled, a truncated or malformed answer), the merge is refused rather than treated as green. The refusal names the cause, `Actions status unavailable (permission denied or Actions disabled)`, and the merge stays refused until the workflow status can be verified: a credential with Actions read access, or the repository's Actions settings, is the way out rather than a way around. `--dry-run` runs the same check.
+
 ### Hooks for your own tooling
 
-`$DORI_HOME/config.json` may name argv templates under `hooks`: `onReady`, `onReport` and `onLost` run in the background when those events happen (with `{key}`, `{text}` and `{evidence}` filled in per argument), and `reviewCommand` replaces the built-in reviewer as long as it prints the same `VERDICT:` line. `DORI_PROMPTS_DIR` points the harness at your own copies of the prompts.
+`$DORI_HOME/config.json` may name argv templates under `hooks`: `onReady`, `onReport` and `onLost` run in the background when those events happen (with `{key}`, `{text}` and `{evidence}` filled in per argument), and `reviewCommand` replaces the built-in reviewer as long as it prints the same column-zero `VERDICT: CLEAR` or `VERDICT: BLOCK` line (a trailing reason is allowed) or the whole-line emphasised form. `DORI_PROMPTS_DIR` points the harness at your own copies of the prompts.
 
 ## Dori mode in depth
 

@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-
 import { configPath, fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { laneGoalActive } from "./goal-record.ts";
@@ -72,7 +71,11 @@ const laneEnv = (): Record<string, string> => {
 // config's absolute path, rides in every dori command its footer names instead.
 const hostedCli = (deps: FlowDeps): string | undefined =>
   deps.config.laneRuntime !== undefined && AGENT_SESSION_KINDS.has(deps.config.laneRuntime)
-    ? cliCommand(undefined, { ...laneEnv(), DORI_CONFIG: resolve(configPath()) })
+    ? cliCommand(undefined, {
+        ...laneEnv(),
+        DORI_CONFIG: resolve(configPath()),
+        DORI_STATE_DIR: resolve(deps.config.stateDir),
+      })
     : undefined;
 
 // The runtime the lead's pane is on; unknown when no runtime can be chosen (the footer then names no command).
@@ -143,7 +146,9 @@ const startLane = async (
   let ref: SessionRef;
   try {
     hosted = AGENT_SESSION_KINDS.has(rts.lane.kind);
-    const env = hosted ? {} : laneEnv();
+    // The lane reports into this home (#197): DORI_CONFIG reaches it through laneLaunchEnv; the state dir may come
+    // from the config file, so it is passed absolute.
+    const env = hosted ? {} : { ...laneEnv(), DORI_STATE_DIR: resolve(deps.config.stateDir) };
     const spec = { name: input.key, role: "lane", container: "tab", cwd, env, model } as const;
     ref = await rts.lane.create(group === undefined ? spec : { ...spec, group });
   } catch (e) {

@@ -30,7 +30,7 @@ A session is stored as a `SessionRef`: the runtime, the id (`w1:p3` on herdr, `t
 New sessions open on one runtime, picked in this order (`readRuntimeChoice` in `src/runtime/select.ts`):
 
 1. `DORI_RUNTIME=herdr` or `DORI_RUNTIME=hc`.
-2. `"runtime": "herdr"` or `"runtime": "hc"` in `$DORI_HOME/config.json` (default `~/.dori/config.json`). This is the same file the dori-mode skill reads, so one line sets both.
+2. `"runtime": "herdr"` or `"runtime": "hc"` in `$DORI_HOME/config.json` (default `~/.dori/config.json`). The dori-mode skill reads `DORI_CONFIG` (default `~/.dori/config.json`) and never `DORI_HOME`, so it is the same file, and one line sets both, only while both are unset, or `DORI_CONFIG` names `$DORI_HOME/config.json`.
 3. `HC_TERMINAL_ID` is set: Dori runs inside an hc terminal, so hc.
 4. `HERDR_PANE_ID` is set: Dori runs inside a herdr pane, so herdr.
 5. The binaries on PATH: hc (herdr-core) when it is installed, else herdr. hc is the default runtime; with both installed, herdr is one config line away.
@@ -148,7 +148,7 @@ The two loops are plain processes with no inbox and no agent, so they skip steps
 }
 ```
 
-`onReady` runs on `dori ready`, `onReport` on `dori report`, and `onLost` when the duty loop finds a lane whose session vanished. `{key}`, `{text}` and `{evidence}` are replaced inside each element. Hooks run in the background, and a failing hook is one stderr line; it never fails the command. `reviewCommand` replaces the built-in reviewer in `dori review`, gets `{pr}`, `{repo}`, `{number}`, `{sha}` and `{text}` (the rendered review prompt), and must print a `VERDICT: CLEAR` or `VERDICT: BLOCK` line. `DORI_PROMPTS_DIR` points Dori at another directory of prompt files in place of the repo's `prompts/`.
+`onReady` runs on `dori ready`, `onReport` on `dori report`, and `onLost` when the duty loop finds a lane whose session vanished. `{key}`, `{text}` and `{evidence}` are replaced inside each element. Hooks run in the background, and a failing hook is one stderr line; it never fails the command. `reviewCommand` replaces the built-in reviewer in `dori review`, gets `{pr}`, `{repo}`, `{number}`, `{sha}` and `{text}` (the rendered review prompt), and must print `VERDICT: CLEAR` or `VERDICT: BLOCK` as a column-zero line of its own (a trailing reason is allowed), or that exact line wrapped in markdown emphasis or backticks. Indented lines, bullet or list markers, blockquotes and fenced examples never count, and a plain and an emphasised verdict that disagree write no receipt. `DORI_PROMPTS_DIR` points Dori at another directory of prompt files in place of the repo's `prompts/`.
 
 ## Lanes in omo's shared host (`omo-host`)
 

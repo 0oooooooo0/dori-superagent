@@ -21,7 +21,8 @@ export const USAGE = `dori - a proactive multi-session harness on herdr or hc + 
   dori backlog list | decide <id> --text ANSWER | drop <id> [--text WHY]
   dori backlog import <owner/repo> [--label dori] [--cwd DIR]   open labelled issues -> items
   dori review <owner/repo#N> [--model M]      fresh omo reviewer at the exact head -> receipt
-  dori merge <owner/repo#N> [--dry-run]       CLEAR receipt at head + green checks -> squash merge
+  dori merge <owner/repo#N> [--dry-run]       CLEAR receipt at head + green checks and pull_request workflows
+                                              (refused while workflow status cannot be verified)
   dori done <key>                             lead closes a READY lane
   dori migrate [--to hc|herdr] (--lane K | --role lead|duty|duty-loop|hourly-loop | --all) [--dry-run]
                [--wait-minutes N] [--resume]  hand sessions over to another runtime; MIGRATED, SKIP, DEFERRED,
@@ -48,9 +49,12 @@ export function parse(argv: readonly string[]): Args {
       pos.push(a);
       continue;
     }
-    const name = a.slice(2);
+    // --interval=60 is --interval 60; read whole, it would be a flag nobody reads that swallows the next argument.
+    const eq = a.indexOf("=");
+    const name = eq < 0 ? a.slice(2) : a.slice(2, eq);
+    if (eq >= 0 && BOOLEAN_FLAGS.has(name)) throw new Refusal(`--${name} takes no value`);
     // A value flag at the very end (--text $MSG with MSG unset) has no value; reading it as "true" would send that word.
-    const value = BOOLEAN_FLAGS.has(name) ? "true" : argv[++i];
+    const value = eq >= 0 ? a.slice(eq + 1) : BOOLEAN_FLAGS.has(name) ? "true" : argv[++i];
     if (value === undefined) throw new Refusal(`--${name} needs a value`);
     flags.set(name, [...(flags.get(name) ?? []), value]);
   }
