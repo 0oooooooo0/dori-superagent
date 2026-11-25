@@ -42,16 +42,23 @@ export async function deliver(
   if (before.status === "gone" || before.shellInFront) return { kind: "no-agent" };
   if (!force && (before.status === "blocked" || before.status === "error"))
     return { kind: "not-ready", status: before.status };
-  // A terminal that has never reported (status null, no shell in front: an editor, a program without OSC 7501) gets
-  // nothing typed into it whatever `when` says: its state is unknown, so the message stays queued.
+  // A terminal that has never reported a usable word (status null: an editor, a program without OSC 7501) used to get
+  // nothing typed into it, whatever `when` says. The probe now classifies such a terminal off its screen (omo's
+  // markers), so `unknown` here means the screen gave no verdict either and the message stays queued.
   if (before.status === "unknown") return { kind: "not-ready", status: "unknown" };
   // `done` is the program's own "turn finished, waiting": typing is what it waits for, and `--if` takes only idle|working.
   // Idle read off the screen while hc's own word is still `working` (#178): gate on that word, so hc refuses (and the
   // message stays queued) if omo moves to blocked or idle in between. omo reports `working` for a turn too, so a turn
   // that starts in the one round trip between the screen read and this send still passes.
+  // A terminal hc never heard a status word from has nothing for `--if` to compare: the screen classification is the
+  // gate, the same trust the herdr runtime places in its scrape — so `when` is matched against it here instead.
+  const unreported = probed.word === "unknown";
+  if (unreported && when !== "any" && before.status !== when) return { kind: "not-ready", status: before.status };
   const screenIdle = when === "idle" && before.status === "idle" && probed.word === "working";
   const gate =
-    when === "any" || (when === "idle" && before.status === "done") ? [] : ["--if", screenIdle ? "working" : when];
+    when === "any" || unreported || (when === "idle" && before.status === "done")
+      ? []
+      : ["--if", screenIdle ? "working" : when];
   const argv = ["send", id, ...gate, ...(force ? ["--force"] : []), "--", text];
   let result: Record<string, unknown>;
   try {
@@ -86,7 +93,29 @@ export async function keys(exec: Exec, id: string, names: readonly Key[]): Promi
   await hcCall(exec, ["keys", id, ...names.map((k) => KEY_NAMES[k])]);
 }
 
-export async function read(exec: Exec, id: string, lines: number): Promise<string> {
+export async function read(exec: Exec, id: string, lines: number, unwrapped = false): Promise<string> {
   const result = await hcCall(exec, ["read", id, "--lines", String(lines)]);
-  return typeof result["text"] === "string" ? result["text"] : "";
+  const text = typeof result["text"] === "string" ? result["text"] : "";
+  if (!unwrapped) return text;
+  const cols = (await hcCall(exec, ["get", id]))["cols"];
+  return typeof cols === "number" && cols > 0 ? joinWrapped(text, cols) : text;
 }
+
+/**
+ * hc prints screen rows with trailing blanks cut and says nothing about wrapping, so a row that fills the terminal is
+ * taken as wrapped: `cols` cells wide (cut inside a word: joined as is), or `cols - 1` when the wrap fell on a space
+ * that was cut (joined with that space put back, so `rate` + `limit` reads `rate limit` again). Width is counted in
+ * terminal cells (a CJK character or an emoji is two). A line the agent printed exactly that wide is joined to the next
+ * one too: callers must not treat a joined line as one message (launch strips only the warning text, never a line).
+ */
+export const joinWrapped = (text: string, cols: number): string => {
+  const lines: string[] = [];
+  let glue: string | undefined;
+  for (const row of text.split("\n")) {
+    if (glue === undefined) lines.push(row);
+    else lines[lines.length - 1] += glue + row;
+    const width = Bun.stringWidth(row);
+    glue = cols <= 1 || width < cols - 1 ? undefined : width >= cols ? "" : " ";
+  }
+  return lines.join("\n");
+};

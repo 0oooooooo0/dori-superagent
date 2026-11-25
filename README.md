@@ -55,13 +55,13 @@ Both installs put a command named `dori` on your PATH, so install one per machin
 
 ### Dori mode, the bot you talk to
 
-You need herdr, Bun 1.4.4 or newer, git, and the GitHub CLI `gh`.
+You need herdr, Bun 1.4.5 or newer, git, and the GitHub CLI `gh`.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sisyphuslabs/dori-superagent/main/install.sh | bash
 ```
 
-That clones this repository to `~/.dori/src`, links the skill into `~/.agents/skills/dori-mode`, links `dori` onto your PATH, and copies an example config to `~/.dori/config.json`. Edit at least `leadPane` (your own herdr pane, from `herdr pane current`), `laneWorkspace` and `defaultCwd`.
+That installs [Doriterm](https://doriterm.com) first when the machine has none (its host and herdr-core, through `get.doriterm.com`; a machine with any Doriterm host keeps it, and `DORI_NO_DORITERM=1` skips the step), then clones this repository to `~/.dori/src`, links the skill into `~/.agents/skills/dori-mode`, links `dori` onto your PATH, and copies an example config to `~/.dori/config.json`. Edit at least `leadPane` (your own herdr pane, from `herdr pane current`), `laneWorkspace` and `defaultCwd`.
 
 Then start your coding agent inside herdr and tell it: Dori mode. It asks what to call it (plain Dori, or ShipDori, WorkDori, so several can run side by side), asks which messenger, finishes the bot's creation and login with you, and greets you through the bot. Before it reads anything of yours it asks for permission tool by tool, and that onboarding is read-only.
 
@@ -69,7 +69,7 @@ The operating contract is [`skills/dori-mode/SKILL.md`](skills/dori-mode/SKILL.m
 
 ### The harness
 
-You need Bun 1.4.4 or newer, herdr, omo, and `gh` (for PR head SHAs, checks and the merge).
+You need Bun 1.4.5 or newer, herdr, omo, and `gh` (for PR head SHAs, checks and the merge).
 
 ```sh
 git clone https://github.com/sisyphuslabs/dori-superagent
@@ -170,13 +170,13 @@ A lane that has not reported for 10 minutes, and whose pane is not working, gets
 
 ### Merge needs a CLEAR receipt at the exact head and green checks
 
-`dori merge` reads the PR's head SHA with `gh`, then requires a receipt for that SHA in `~/.dori/receipts/` with verdict `CLEAR`. Only `dori review` writes receipts: it runs a fresh non-interactive omo on `prompts/review.md` pinned to that SHA, and when the reviewer prints no `VERDICT:` line, no receipt is written.
+`dori merge` reads the PR's head SHA with `gh`, then requires a receipt for that SHA in `~/.dori/receipts/` with verdict `CLEAR`. Only `dori review` writes receipts: it runs a fresh non-interactive omo on `prompts/review.md` pinned to that SHA, and when the reviewer prints no column-zero `VERDICT: CLEAR` or `VERDICT: BLOCK` line (a trailing reason is allowed) and no whole-line emphasised form such as `**VERDICT: CLEAR**`, no receipt is written. Bullets, blockquotes and indented code never count, and a plain and an emphasised verdict that disagree write no receipt.
 
 Then `gh pr checks` must return at least one check, every check must be `pass` or `skipping`, and at least one must be `pass`. An empty check list is refused with "an empty check list is never green". A push after the review changes the head SHA, so the receipt no longer matches and `dori review` has to run again.
 
 ### Hooks for your own tooling
 
-`$DORI_HOME/config.json` may name argv templates under `hooks`: `onReady`, `onReport` and `onLost` run in the background when those events happen (with `{key}`, `{text}` and `{evidence}` filled in per argument), and `reviewCommand` replaces the built-in reviewer as long as it prints the same `VERDICT:` line. `DORI_PROMPTS_DIR` points the harness at your own copies of the prompts.
+`$DORI_HOME/config.json` may name argv templates under `hooks`: `onReady`, `onReport` and `onLost` run in the background when those events happen (with `{key}`, `{text}` and `{evidence}` filled in per argument), and `reviewCommand` replaces the built-in reviewer as long as it prints the same column-zero `VERDICT: CLEAR` or `VERDICT: BLOCK` line (a trailing reason is allowed) or the whole-line emphasised form. `DORI_PROMPTS_DIR` points the harness at your own copies of the prompts.
 
 ## Dori mode in depth
 

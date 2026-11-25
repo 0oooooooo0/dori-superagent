@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 import { launchLane } from "../src/launch.ts";
 import { depsFor, fakeClock, newWorld, withState, type World } from "./fakes.ts";
@@ -102,4 +102,22 @@ test("launch opens the lane with DORI_CONFIG and DORI_STATE_DIR of this home, so
   const env = create.slice(create.indexOf("env") + 1);
   expect(env).toContain(`DORI_CONFIG=${join(home, "config.json")}`);
   expect(env).toContain(`DORI_STATE_DIR=${join(home, "state")}`);
+});
+
+test("a relative DORI_CONFIG or state dir reaches the lane as this launcher's absolute path, not the lane cwd's (#197)", async () => {
+  const brief = join(state.dir, "brief.md");
+  writeFileSync(brief, "# brief\n");
+  const before = process.env["DORI_CONFIG"];
+  process.env["DORI_CONFIG"] = "rel-home/config.json";
+  try {
+    const deps = depsFor(world, fakeClock(T0), "rel-home/state", { runtime: "hc" });
+    await launchLane(deps, { key: "rel-lane", title: "t", brief, done: "closed acme/app#3" });
+  } finally {
+    if (before === undefined) delete process.env["DORI_CONFIG"];
+    else process.env["DORI_CONFIG"] = before;
+  }
+  const create = world.calls.findLast((c) => c[0] === "hc" && c[2] === "run") ?? [];
+  const env = create.slice(create.indexOf("env") + 1);
+  expect(env).toContain(`DORI_CONFIG=${process.cwd()}${sep}rel-home/config.json`);
+  expect(env).toContain(`DORI_STATE_DIR=${resolve("rel-home/state")}`);
 });
