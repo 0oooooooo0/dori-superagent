@@ -55,7 +55,7 @@ Beide Installationen legen einen Befehl namens `dori` in deinen PATH, installier
 
 ### Dori mode, der Bot, mit dem du redest
 
-Du brauchst herdr, Bun 1.4.4 oder neuer, git und die GitHub-CLI `gh`.
+Du brauchst herdr, Bun 1.4.5 oder neuer, git und die GitHub-CLI `gh`.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sisyphuslabs/dori-superagent/main/install.sh | bash
@@ -69,7 +69,7 @@ Der Betriebsvertrag ist [`skills/dori-mode/SKILL.md`](skills/dori-mode/SKILL.md)
 
 ### Der Harness
 
-Du brauchst Bun 1.4.4 oder neuer, herdr, omo und `gh` (für die Head-SHAs von PRs, die Checks und den Merge).
+Du brauchst Bun 1.4.5 oder neuer, herdr, omo und `gh` (für die Head-SHAs von PRs, die Checks und den Merge).
 
 ```sh
 git clone https://github.com/sisyphuslabs/dori-superagent
@@ -170,13 +170,13 @@ Eine Lane, die sich 10 Minuten nicht gemeldet hat und deren Pane nicht arbeitet,
 
 ### Merge braucht ein CLEAR-Receipt am exakten Head und grüne Checks
 
-`dori merge` liest mit `gh` die Head-SHA des PRs und verlangt dann für genau diese SHA ein Receipt in `~/.dori/receipts/` mit dem Urteil `CLEAR`. Receipts schreibt nur `dori review`: Es startet ein frisches, nicht interaktives omo auf `prompts/review.md`, festgenagelt auf diese SHA; eine Prüfung entfernt das frühere Receipt für diese SHA, bevor sie startet, und schreibt nur dann ein neues, wenn sie CLEAR oder BLOCK zurückgibt. Solange am selben Head eine Prüfung oder ein Merge läuft, verweigert `dori merge` statt ein älteres Receipt zu nutzen.
+`dori merge` liest mit `gh` die Head-SHA des PRs und verlangt dann für genau diese SHA ein Receipt in `~/.dori/receipts/` mit dem Urteil `CLEAR`. Receipts schreibt nur `dori review`: Es startet ein frisches, nicht interaktives omo auf `prompts/review.md`, festgenagelt auf diese SHA; eine Prüfung entfernt das frühere Receipt für diese SHA, bevor sie startet, und schreibt nur dann ein neues, wenn sie CLEAR oder BLOCK zurückgibt. Als Urteil zählt eine am Zeilenanfang stehende `VERDICT: CLEAR`- oder `VERDICT: BLOCK`-Zeile (ein kurzer Grund dahinter ist erlaubt) oder dieselbe Zeile als Ganzes in Markdown-Hervorhebung oder Backticks; gibt der Reviewer keins von beiden aus, wird kein Receipt geschrieben. Einrückung, Aufzählungszeichen, Zitate und Beispiele in Codeblöcken zählen nicht; widersprechen sich eine schmucklose und eine hervorgehobene Zeile, wird kein Receipt geschrieben. Solange am selben Head eine Prüfung oder ein Merge läuft, verweigert `dori merge` statt ein älteres Receipt zu nutzen.
 
 Dann muss `gh pr checks` mindestens einen Check liefern, jeder Check muss `pass` oder `skipping` sein, und mindestens einer muss `pass` sein. Eine leere Check-Liste wird abgelehnt mit "an empty check list is never green". Ein Push nach dem Review ändert die Head-SHA, damit passt das Receipt nicht mehr, und `dori review` muss erneut laufen.
 
 ### Hooks für dein eigenes Tooling
 
-`$DORI_HOME/config.json` kann unter `hooks` argv-Vorlagen nennen: `onReady`, `onReport` und `onLost` laufen im Hintergrund, wenn diese Ereignisse eintreten (mit `{key}`, `{text}` und `{evidence}` pro Argument eingesetzt), und `reviewCommand` ersetzt den eingebauten Reviewer, solange es dieselbe `VERDICT:`-Zeile ausgibt. `DORI_PROMPTS_DIR` verweist den Harness auf deine eigenen Kopien der Prompts.
+`$DORI_HOME/config.json` kann unter `hooks` argv-Vorlagen nennen: `onReady`, `onReport` und `onLost` laufen im Hintergrund, wenn diese Ereignisse eintreten (mit `{key}`, `{text}` und `{evidence}` pro Argument eingesetzt), und `reviewCommand` ersetzt den eingebauten Reviewer, solange es dieselbe am Zeilenanfang stehende `VERDICT: CLEAR`- oder `VERDICT: BLOCK`-Zeile (Grund dahinter erlaubt) oder die hervorgehobene ganze Zeile ausgibt. `DORI_PROMPTS_DIR` verweist den Harness auf deine eigenen Kopien der Prompts.
 
 ## Dori mode im Detail
 
