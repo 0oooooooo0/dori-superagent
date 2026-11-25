@@ -147,8 +147,7 @@ const startLane = async (
   let ref: SessionRef;
   try {
     hosted = AGENT_SESSION_KINDS.has(rts.lane.kind);
-    // The lane reports into this home (#197): DORI_CONFIG reaches it through laneLaunchEnv; the state dir may come
-    // from the config file, so it is passed absolute.
+    // #197: the state dir may come from the config file, so the lane gets it absolute (DORI_CONFIG: laneLaunchEnv).
     const env = hosted ? {} : { ...laneEnv(), DORI_STATE_DIR: resolve(deps.config.stateDir) };
     const spec = { name: input.key, role: "lane", container: "tab", cwd, env, model } as const;
     ref = await rts.lane.create(group === undefined ? spec : { ...spec, group });
