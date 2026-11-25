@@ -162,11 +162,13 @@ The lead is the only session that talks to you (`prompts/lead.md`). The lane rul
 
 `dori send` asks herdr for the pane's agent state first. `idle` or `done` get the message now; anything else has it queued in `~/.dori/inbox/`, and the duty loop delivers the queue when the pane goes idle, as one batch. A pane with a shell in front is never typed into, because typed text would run as a command.
 
-When a delivery failed after the text may already have reached the pane, only Enter is pressed later, and only into the agent it was typed into; if herdr then sees a different agent, the entry is held, the lead is told once with `[DELIVERY-AMBIGUOUS <pane>]`, and `dori inbox ack` or `dori inbox resend` settles it by hand.
+When a delivery failed after the text may already have reached the pane, only Enter is pressed later, and only into the agent it was typed into; if herdr then sees a different agent, the entry is held, the lead is told once with `[DELIVERY-AMBIGUOUS <pane>]`, and `dori inbox ack` or `dori inbox resend` settles it by hand. A message that never reached the pane and no longer should — a stale instruction left in a pane that read `working` for hours — is thrown away with `dori inbox drop <pane|role|key> <index>`, or `--all` for every queued entry of that inbox.
 
 ### Nudges at 10, 20 and 40 minutes
 
-A lane that has not reported for 10 minutes, and whose pane is not working, gets `prompts/nudge.md` in its pane, again at 20, and at 40 the duty loop sends the lead `[ESCALATE <key>]`. A lane that reported `--status waiting`, or whose pane is `blocked`, is left alone.
+A lane that has not reported for 10 minutes, and whose pane is not working, gets `prompts/nudge.md` in its pane, again at 20, and at 40 the duty loop sends the lead `[ESCALATE <key>]`. A lane that reported `--status waiting` is left alone.
+
+A pane that stands in `blocked` or `error` takes no input, so nothing would ever move it: after 10 minutes the duty loop sends the lead `[STUCK <key>]` once for that stall and types nothing into the pane. When the pane says anything else again, a later stall is reported again.
 
 ### Merge needs a CLEAR receipt at the exact head and green checks
 
@@ -277,7 +279,7 @@ dori sends anonymous usage counts the same way omo does: OTLP/HTTP JSON logs to 
 | `dori.lane_ready` | `dori ready` | `evidence_count`, `lane_minutes` |
 | `dori.review_completed` | `dori review` | `verdict`: `CLEAR` or `BLOCK` |
 | `dori.merge_decided` | `dori merge` without `--dry-run` | `outcome` |
-| `dori.duty_summary` | at most once an hour, from the duty loop | `ticks`, `flushed`, `nudges`, `escalations`, `lost` |
+| `dori.duty_summary` | at most once an hour, from the duty loop | `ticks`, `flushed`, `nudges`, `escalations`, `lost`, `stuck` |
 
 Every record also carries the service name and version, the install hash, a CI flag, the OS type and version, and the CPU architecture. Never sent: paths, repo names, PR numbers, lane keys, briefs, messages or any other text. A command waits at most 2 seconds for the send, and a telemetry failure never fails a command.
 
