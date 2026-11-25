@@ -1,4 +1,4 @@
-import type { RuntimeKind, SessionRef } from "../../../../src/runtime/types.ts";
+import type { SessionRef, TerminalKind } from "../../../../src/runtime/types.ts";
 import type { ChosenRuntimes, Runner } from "./run.ts";
 import { descendants, PS_ARGV, type Proc, parseProcs } from "./session-id.ts";
 
@@ -11,7 +11,7 @@ const readTable = async (run: Runner): Promise<Snapshot> => {
 };
 
 /** The variable each runtime sets to the session's own id in the environment of the session's processes. */
-const SESSION_VAR: Readonly<Record<RuntimeKind, string>> = { herdr: "HERDR_PANE_ID", hc: "HC_TERMINAL_ID" };
+const SESSION_VAR: Readonly<Record<TerminalKind, string>> = { herdr: "HERDR_PANE_ID", hc: "HC_TERMINAL_ID" };
 
 /**
  * The root pid comes from the runtime, which may run the session on another host, while `ps` reads this host. The root
@@ -21,6 +21,9 @@ const SESSION_VAR: Readonly<Record<RuntimeKind, string>> = { herdr: "HERDR_PANE_
 const notOwnedHere = async (run: Runner, ref: SessionRef, root: number): Promise<string | undefined> => {
   const env = await run(["ps", "eww", "-o", "command=", "-p", String(root)]);
   if (env.code !== 0 || !env.out.trim()) return `session root ${root} could not be read on this host`;
+  // An omo-host session runs inside the shared engine host: no process there belongs to this lane alone.
+  if (ref.runtime === "omo-host")
+    return "an omo-host session shares the engine host's processes; none is the lane's own";
   const marker = `${SESSION_VAR[ref.runtime]}=${ref.id}`;
   return env.out.split(/\s+/).includes(marker)
     ? undefined
