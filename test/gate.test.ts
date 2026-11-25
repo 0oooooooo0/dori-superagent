@@ -7,11 +7,21 @@ import { setup } from "./harness-setup.ts";
 
 describe("review + merge gate", () => {
   const head = "a".repeat(40);
-  function gh(w: World, checks: unknown[]) {
+  type Runs = { workflow_runs?: unknown[]; total_count?: number } | { fail: string } | { body: string };
+  function gh(w: World, checks: unknown[], runs: Runs = {}) {
     w.gh = (argv) => {
       if (argv[1] === "view") return { code: 0, stdout: JSON.stringify({ headRefOid: head }) };
       if (argv[1] === "checks") return { code: 0, stdout: JSON.stringify(checks) };
       if (argv[1] === "merge") return { code: 0, stdout: "" };
+      if (argv[0] === "api") {
+        if ("fail" in runs) return { code: 1, stdout: "", stderr: runs.fail };
+        if ("body" in runs) return { code: 0, stdout: runs.body };
+        const list = runs.workflow_runs ?? [];
+        return {
+          code: 0,
+          stdout: JSON.stringify({ total_count: runs.total_count ?? list.length, workflow_runs: list }),
+        };
+      }
       return { code: 1, stdout: "" };
     };
   }
@@ -95,6 +105,7 @@ describe("review + merge gate", () => {
     w.gh = (argv) => {
       if (argv[1] === "view") return { code: 0, stdout: JSON.stringify({ headRefOid: current }) };
       if (argv[1] === "checks") return { code: 0, stdout: JSON.stringify([{ name: "test", bucket: "pass" }]) };
+      if (argv[0] === "api") return { code: 0, stdout: JSON.stringify({ total_count: 0, workflow_runs: [] }) };
       return { code: 0, stdout: "" };
     };
     w.reviewer = () => ({ code: 0, stdout: "VERDICT: CLEAR" });
@@ -148,9 +159,11 @@ describe("review + merge gate", () => {
           return {
             code: 0,
             stdout:
-              argv[1] === "checks"
-                ? JSON.stringify([{ name: "test", bucket: "pass" }])
-                : JSON.stringify({ headRefOid: head }),
+              argv[0] === "api"
+                ? JSON.stringify({ total_count: 0, workflow_runs: [] })
+                : argv[1] === "checks"
+                  ? JSON.stringify([{ name: "test", bucket: "pass" }])
+                  : JSON.stringify({ headRefOid: head }),
             stderr: "",
           };
         started();

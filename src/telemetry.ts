@@ -18,7 +18,9 @@ export type MergeOutcome =
   | "review_in_progress"
   | "no_checks"
   | "checks_red"
-  | "checks_all_skipped";
+  | "checks_all_skipped"
+  | "workflow_pending"
+  | "workflow_status_unknown";
 export type DutyCounts = { ticks: number; flushed: number; nudges: number; escalations: number; lost: number };
 
 export type TelemetryEvent =
