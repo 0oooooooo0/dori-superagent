@@ -1,10 +1,11 @@
+import { resolve } from "node:path";
 import { configPath, fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { laneGoalActive } from "./goal-record.ts";
 import { BRIEF_START, footer, originalBrief, quoteForPane } from "./launch-footer.ts";
 import type { Runtimes } from "../../../../src/runtime/registry.ts";
-import { parseRef, type SessionRef } from "../../../../src/runtime/types.ts";
-import { LANE_KEY, type Lane, RESERVED_LANE_KEY, sessionFields, upgradeLane } from "./registry.ts";
+import type { SessionRef } from "../../../../src/runtime/types.ts";
+import { LANE_KEY, type Lane, RESERVED_LANE_KEY, sessionFields } from "./registry.ts";
 import { iso, runtimesOf } from "./run.ts";
 import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
@@ -44,7 +45,10 @@ const launchStatus = async (rts: Runtimes, ref: SessionRef): Promise<{ status?: 
     if (!found) return { status: "gone" };
     if (found.status !== undefined) return { status: found.status };
     const probed = (await rts.for(ref).probe(ref)).status;
-    return probed === "shell" || probed === "gone" ? { status: probed } : {};
+    // `unknown` stays unreported (the screen gave no verdict either); any other probed status is evidence enough —
+    // on hc it is the screen classification for agents that never emit OSC 7501 (herdr's list always carries a
+    // status, so this fallback only ever runs for hc terminals).
+    return probed === "unknown" ? {} : { status: probed };
   } catch (e) {
     if (isKind(e, "not_found")) return { status: "gone" };
     return { error: e instanceof Error ? e.message : String(e) };
@@ -75,24 +79,6 @@ export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promis
   for (const [name, value] of Object.entries(input.budget ?? {})) {
     if (value != null && (!Number.isFinite(value) || value < 0)) throw new LaunchError(`invalid ${name} ceiling`);
   }
-};
-
-export const adoptLane = async (deps: FlowDeps, input: LaunchInput & { readonly pane: string }): Promise<Lane> => {
-  await validateLaunch(deps, input);
-  const base: Lane = {
-    key: input.key,
-    title: input.title,
-    thread: input.thread ?? "none",
-    brief: input.brief,
-    done: input.done,
-    cwd: input.cwd ?? deps.config.defaultCwd,
-    openedAt: iso(deps.clock),
-  };
-  // `hc:t7` or `herdr:w1:p3` names its runtime; any other id is a herdr pane, as before runtimes existed.
-  const ref = parseRef(input.pane);
-  const lane = ref ? { ...base, ...sessionFields(ref) } : upgradeLane({ ...base, pane: input.pane });
-  await deps.registry.write(lane);
-  return lane;
 };
 
 export const prepareLaunch = async (
@@ -158,7 +144,10 @@ const startLane = async (
   }
   let ref: SessionRef;
   try {
-    const spec = { name: input.key, role: "lane", container: "tab", cwd, env } as const;
+    // The lane reports into this home (#197): DORI_CONFIG reaches it through laneLaunchEnv (inherited when absolute,
+    // rewritten against this cwd when relative); the state dir may come from the config file, so it is passed absolute.
+    const laneEnv = { ...env, DORI_STATE_DIR: resolve(deps.config.stateDir) };
+    const spec = { name: input.key, role: "lane", container: "tab", cwd, env: laneEnv } as const;
     ref = await rts.default.create(group === undefined ? spec : { ...spec, group });
   } catch (e) {
     throw new LaunchError(`session create failed: ${e instanceof Error ? e.message : String(e)}`);
