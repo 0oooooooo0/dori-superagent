@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { configPath, fill } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { laneGoalActive } from "./goal-record.ts";
@@ -143,7 +144,10 @@ const startLane = async (
   }
   let ref: SessionRef;
   try {
-    const spec = { name: input.key, role: "lane", container: "tab", cwd, env } as const;
+    // The lane reports into this home (#197): DORI_CONFIG reaches it through laneLaunchEnv (inherited when absolute,
+    // rewritten against this cwd when relative); the state dir may come from the config file, so it is passed absolute.
+    const laneEnv = { ...env, DORI_STATE_DIR: resolve(deps.config.stateDir) };
+    const spec = { name: input.key, role: "lane", container: "tab", cwd, env: laneEnv } as const;
     ref = await rts.default.create(group === undefined ? spec : { ...spec, group });
   } catch (e) {
     throw new LaunchError(`session create failed: ${e instanceof Error ? e.message : String(e)}`);
