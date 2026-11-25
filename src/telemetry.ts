@@ -15,6 +15,7 @@ export type MergeOutcome =
   | "merged"
   | "no_receipt"
   | "review_block"
+  | "review_in_progress"
   | "no_checks"
   | "checks_red"
   | "checks_all_skipped"
