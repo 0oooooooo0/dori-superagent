@@ -89,7 +89,7 @@ esac
   expect(failed.code).toBe(1);
   expect(failed.err).toContain("reviewer exited 9");
   expect(receipts().filter((n) => n.endsWith(".json"))).toEqual([]);
-  expect(receipts().filter((n) => n.endsWith(".noverdict.txt"))).toHaveLength(1);
+  expect(receipts().filter((n) => n.endsWith(".noverdict.txt"))).toHaveLength(2);
   await refused(`no review receipt at head ${head.slice(0, 12)}`);
 
   setMode("clear");
