@@ -17,6 +17,7 @@ const USAGE = `dori <command> [options]
 
   launch <key> --title T --brief FILE --done "merged o/r#N; closed o/r#M" [--thread REF] [--model M] [--cwd DIR]
          [--wall-minutes N|none] [--token-limit N|none] [--cost-limit N|none] [--activity-path FILE ...] [--dry-run]
+  launch <key> --resume ...            same flags: start a parked lane's key again (a fresh open record replaces the parked one)
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
   attach <key> [--print]               watch an omo-host lane: an hc terminal running omo's attached TUI client (--print: the command only)
   sync   [--write]                     registry vs live panes; read-only unless --write
@@ -41,6 +42,7 @@ const USAGE = `dori <command> [options]
   worklog list [--open]                items as JSON; <stateDir>/worklog.md holds the same for reading
   close  <key> [--note TEXT] [--lesson TEXT] [--evidence PATH]
                                        close now (Done signals must read back live); an optional lesson never blocks it
+  park   <key> [--note TEXT]           a lane waiting on the owner: close its session, keep its record, worktrees and reports
   pause  <key> [--note TEXT]           the owner said wait: goal paused (read back), running turn stopped, no nudges; exit 3 if unconfirmed
   resume <key> [--note TEXT]           undo pause: goal resumed (read back), lane back to its earlier status
   watch                                long-running: emits LANE_* lines every 30 s
@@ -95,6 +97,7 @@ const flags = parseArgs({
     outcome: { type: "string" },
     lesson: { type: "string" },
     "dry-run": { type: "boolean" },
+    resume: { type: "boolean" },
     print: { type: "boolean" },
     global: { type: "boolean" },
     source: { type: "string" },

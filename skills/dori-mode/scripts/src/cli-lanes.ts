@@ -1,9 +1,10 @@
-/** dori launch, adopt, attach, claim-done, object-done, close, pause and resume. */
+/** dori launch, adopt, attach, claim-done, object-done, close, park, pause and resume. */
 import { OmoHostRuntime } from "../../../../src/runtime/omo-host/index.ts";
 import { type Command, die } from "./cli-context.ts";
 import { claimDone, closeLane, objectDone } from "./done-flow.ts";
 import { adoptLane } from "./launch-adopt.ts";
 import { type LaunchInput, launchLane, prepareLaunch } from "./launch.ts";
+import { parkLane } from "./park.ts";
 import { pauseLane, resumeLane } from "./pause.ts";
 import { shellQuote } from "./launch-footer.ts";
 import { sessionOf } from "./registry.ts";
@@ -30,6 +31,7 @@ const launch: Command = async ({ key, opt, need, ceiling, strings, values, deps 
       ...(costUsd !== undefined ? { costUsd } : {}),
     },
     activityPaths: strings("activity-path"),
+    ...(values["resume"] ? { resume: true } : {}),
   };
   if (values["dry-run"]) {
     const prepared = await prepareLaunch(deps, input);
@@ -90,6 +92,15 @@ const close: Command = async ({ key, opt, lane, deps }) => {
   process.exit(r.closed ? 0 : 2);
 };
 
+// The registry is read directly: a closed lane is refused here with exit 2, where `lane()` would exit 1.
+const park: Command = async ({ key, opt, deps }) => {
+  const k = key ?? die("park needs a lane key");
+  const target = (await deps.registry.read(k)) ?? die(`no registered lane "${k}"`);
+  const r = await parkLane(deps, target, opt("note") ?? "parked by the lead");
+  console.log(r.line);
+  process.exit(r.parked ? 0 : 2);
+};
+
 const pauseOrResume: Command = async ({ command, key, opt, lane, deps }) => {
   const act = command === "pause" ? pauseLane : resumeLane;
   const r = await act(
@@ -114,6 +125,7 @@ export const laneCommands: Readonly<Record<string, Command>> = {
     console.log(await objectDone(deps, await lane(key ?? die("object-done needs a lane key")), reasons));
   },
   close,
+  park,
   pause: pauseOrResume,
   resume: pauseOrResume,
 };

@@ -5,7 +5,8 @@ import { laneGoalActive } from "./goal-record.ts";
 import { BRIEF_START, cliCommand, footer, leadSendArgv, originalBrief, quoteForPane } from "./launch-footer.ts";
 import type { Runtimes } from "../../../../src/runtime/registry.ts";
 import { AGENT_SESSION_KINDS, type SessionRef } from "../../../../src/runtime/types.ts";
-import { LANE_KEY, type Lane, RESERVED_LANE_KEY, sessionFields } from "./registry.ts";
+import { launchRefusal } from "./park.ts";
+import { type Lane, sessionFields } from "./registry.ts";
 import { iso, runtimesOf } from "./run.ts";
 import { Reports } from "./reports.ts";
 import { doneSyntaxErrors } from "./signals.ts";
@@ -26,6 +27,7 @@ export type LaunchInput = {
   readonly cwd?: string;
   readonly budget?: BudgetLimits;
   readonly activityPaths?: readonly string[];
+  readonly resume?: boolean;
 };
 
 export class LaunchError extends Error {}
@@ -49,10 +51,8 @@ const goalShown = (screen: string, marker: string): boolean =>
     .includes(marker);
 
 export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promise<void> => {
-  if (!LANE_KEY.test(input.key)) throw new LaunchError(`key must match ${LANE_KEY}`);
-  if (input.key === RESERVED_LANE_KEY)
-    throw new LaunchError(`lane key "${RESERVED_LANE_KEY}" is reserved for the lead`);
-  if (await deps.registry.read(input.key)) throw new LaunchError(`lane ${input.key} is already registered`);
+  const refused = await launchRefusal(deps.registry, input.key, input.resume);
+  if (refused) throw new LaunchError(refused);
   const errors = doneSyntaxErrors(input.done);
   if (errors.length) throw new LaunchError(`Done line is not checkable: ${errors.join("; ")}`);
   for (const [name, value] of Object.entries(input.budget ?? {})) {
